@@ -18,4 +18,5 @@ python ffbooks.py
 
 The current .csv output is "{Sentence}{Translation}{Word}" to be sued in Clozemaster
 
+# Credit
 Frequeny word lists are from https://github.com/hermitdave/FrequencyWords
