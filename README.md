@@ -1,4 +1,4 @@
-# FrquencyFromBooks
+# FrequencyFromBooks
 Create flashcards from Books based on word frequency dictionaries 
 
 
