@@ -1,108 +1,100 @@
 import os
-import re
-import csv
+import glob
 import nltk
-from nltk.tokenize import sent_tokenize, word_tokenize
+import csv
 from googletrans import Translator
-from pathlib import Path
+from nltk.tokenize import sent_tokenize, word_tokenize
+import inquirer
 
-nltk.download('punkt')  # Download the Punkt tokenizer
+nltk.download('punkt')
 
-def select_language():
-    languages = {
-        'de': 'German',
-        'es': 'Spanish',
-        'fr': 'French',
-        'it': 'Italian',
-        'pt': 'Portuguese',
-        'ru': 'Russian'
-    }
+LANGUAGE_MAP = {
+    "de": {"file": "FrequencyWords/de.txt", "google_code": "de"},
+    "es": {"file": "FrequencyWords/es.txt", "google_code": "es"},
+    "fr": {"file": "FrequencyWords/fr.txt", "google_code": "fr"},
+    "it": {"file": "FrequencyWords/it.txt", "google_code": "it"},
+    "pt": {"file": "FrequencyWords/pt.txt", "google_code": "pt"},
+    "ru": {"file": "FrequencyWords/ru.txt", "google_code": "ru"},
+}
 
-    print("Select a language:")
-    for code, name in languages.items():
-        print(f"{code}: {name}")
+language_choices = [
+    inquirer.List(
+        "language",
+        message="Choose a language",
+        choices=[
+            ("German", "de"),
+            ("Spanish", "es"),
+            ("French", "fr"),
+            ("Italian", "it"),
+            ("Portuguese", "pt"),
+            ("Russian", "ru"),
+        ],
+    )
+]
 
-    selected_code = None
-    while selected_code not in languages:
-        selected_code = input("Enter the language code: ")
+language_code = inquirer.prompt(language_choices)["language"]
 
-    return selected_code
+frequency_list_file = LANGUAGE_MAP[language_code]["file"]
+google_translate_code = LANGUAGE_MAP[language_code]["google_code"]
 
-language_code = select_language()
-
-# Create necessary directories if they don't exist
-Path("Books").mkdir(exist_ok=True)
-Path("Output").mkdir(exist_ok=True)
-Path("Processed_words").mkdir(exist_ok=True)
-Path("FrequencyWords").mkdir(exist_ok=True)
-
-# Load the processed words from a file
-processed_words_file = f"Processed_words/{language_code}.txt"
-processed_words = set()
-if os.path.exists(processed_words_file):
-    with open(processed_words_file, "r", encoding='utf-8') as f:
-        for line in f:
-            processed_words.add(line.strip())
-
-# Load the frequency list from a file
-frequency_list_file = f"FrequencyWords/{language_code}.txt"
-with open(frequency_list_file, "r", encoding='utf-8') as f:
+with open(frequency_list_file, "r", encoding="utf-8") as f:
     frequency_list = f.readlines()
 
 word_occurrences = {}
 for line in frequency_list:
-    word, occurrences = line.strip().split()
+    word, occurrences = line.strip().split(maxsplit=1)
     word_occurrences[word] = int(occurrences)
 
-# Initialize a dictionary to store the count of each word in the output
 word_count = {word: 0 for word in word_occurrences}
 
-# Initialize the translator
 translator = Translator()
 
-book_files = sorted([file for file in os.listdir("Books") if file.endswith(".txt")])
+# Load processed words for the selected language
+processed_words_file = f"Processed_words/{language_code}.txt"
+if os.path.exists(processed_words_file):
+    with open(processed_words_file, "r", encoding="utf-8") as f:
+        processed_words = set(f.read().splitlines())
+else:
+    processed_words = set()
+
+book_files = glob.glob("Books/*.txt")
 
 for book_file in book_files:
-    # Load the book from a text file
-    with open(f"Books/{book_file}", "r", encoding='utf-8') as f:
+    with open(book_file, "r", encoding="utf-8") as f:
         book_text = f.read()
 
-    # Tokenize the book text into sentences
     sentences = sent_tokenize(book_text)
 
-    def translate_text(text, src, dest):
-        return translator.translate(text, src=src, dest=dest).text
-
-    def preprocess_text(text):
-        return text.replace("\n", " ").replace("\r", " ")
-
-    # Iterate over the sentences and find the ones containing the specified words
     data = []
-    chapter = 1  # Example: You can modify this to detect chapters in the book
     for sentence in sentences:
         tokenized_sentence = word_tokenize(sentence)
         for word in word_occurrences:
-            if word in tokenized_sentence and word_count[word] < 2:
-                preprocessed_sentence = preprocess_text(sentence)
-                preprocessed_translation = preprocess_text(translate_text(sentence, language_code, 'en'))
-                data.append({
-                    "sentence": preprocessed_sentence,
-                    "translation": preprocessed_translation,
-                    "word": word
-                })
+            if (
+                word in tokenized_sentence
+                and word_count[word] < 2
+                and word not in processed_words
+            ):
+                translation = translator.translate(
+                    sentence, src=google_translate_code, dest="en"
+                ).text
+                data.append(
+                    {"Sentence": sentence, "Translation": translation, "Word": word}
+                )
                 word_count[word] += 1
+                processed_words.add(word)
 
-    output_file = f"Output/{book_file[:-4]}.csv"
-    with open(output_file, "w", newline='', encoding='utf-8') as csvfile:
-        fieldnames = ["sentence", "translation", "word"]
+    output_filename = os.path.splitext(os.path.basename(book_file))[0] + ".csv"
+    output_filepath = os.path.join("Output", output_filename)
+
+    with open(output_filepath, "w", newline="", encoding="utf-8") as csvfile:
+        fieldnames = ["Sentence", "Translation", "Word"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
         writer.writeheader()
         for row in data:
             writer.writerow(row)
-            
-# Save the processed words to a file
-with open(processed_words_file, "w", encoding='utf-8') as f:
+
+# Save the updated processed words for the selected language
+with open(processed_words_file, "w", encoding="utf-8") as f:
     for word in processed_words:
         f.write(f"{word}\n")
-
