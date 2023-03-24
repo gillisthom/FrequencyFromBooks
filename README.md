@@ -12,7 +12,7 @@ Place .txt files in /Books
 
 Run
 ```
-python script.py
+python ffbooks.py
 ```
 2 sentence for each word in the word frequiency list will be created, then it will be added to the list of words that will be exluded.
 
